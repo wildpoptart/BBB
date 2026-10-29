@@ -1,21 +1,11 @@
 #!/bin/sh
-# Default entry: show chip visibility, then exec user command if provided.
 set -eu
-
-echo "==> BeagleBone GPIO container (libgpiod ${LIBGPIOD_VER:-?})"
-echo "==> /dev/gpiochip* inside container:"
-if ls -l /dev/gpiochip* 2>/dev/null; then
-  :
-else
-  echo "    (none) — pass --device=/dev/gpiochipN from the host"
-  echo "    On RHEL9 also try: --security-opt label=disable"
-fi
-
+echo "==> libgpiod ${LIBGPIOD_VER:-1.6.3} container"
+echo "==> /dev/gpiochip*:"
+ls -l /dev/gpiochip* 2>/dev/null || echo "    (none) — pass host chips or use gpio-mockup on the host"
 if command -v gpiodetect >/dev/null 2>&1; then
-  echo "==> gpiodetect:"
-  gpiodetect 2>&1 || echo "    gpiodetect failed (ioctl/open) — see docs/ioctl-container.md"
+  gpiodetect 2>&1 || true
 fi
-
 if [ "$#" -eq 0 ]; then
   exec /bin/bash
 fi

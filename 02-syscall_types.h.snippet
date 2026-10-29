@@ -1,0 +1,19 @@
+/* GPIO uAPI v1 — pair with target_* in syscall_defs.h */
+STRUCT(gpiochip_info,
+       MK_ARRAY(TYPE_CHAR, 32),
+       MK_ARRAY(TYPE_CHAR, 32),
+       TYPE_INT)
+
+STRUCT(gpioline_info,
+       TYPE_INT,
+       TYPE_INT,
+       MK_ARRAY(TYPE_CHAR, 32),
+       MK_ARRAY(TYPE_CHAR, 32))
+
+STRUCT(gpiohandle_data,
+       MK_ARRAY(TYPE_CHAR, 64))
+
+STRUCT(gpiohandle_config,
+       TYPE_INT,
+       MK_ARRAY(TYPE_CHAR, 64),
+       MK_ARRAY(TYPE_INT, 4))

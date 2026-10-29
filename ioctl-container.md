@@ -1,60 +1,31 @@
-# ioctl / missing gpiochip (RHEL 9 BBB emulation)
+# Missing gpiochip / ioctl (libgpiod 1.6.3, no gpio-sim)
 
-## Goal
-
-Emulate BeagleBone GPIO on RHEL 9 with **kernel `gpio-sim`**, then use those host `/dev/gpiochip*` nodes from your app or container (libgpiod 2.2.1).
+## Create chips
 
 ```bash
-sudo ./scripts/setup-gpio-sim.sh   # creates host chips
-./scripts/diagnose-gpio.sh         # must succeed on host first
+sudo ./scripts/setup-gpio-mockup.sh
+./scripts/diagnose-gpio.sh
 ```
 
-## Symptom inside a container
-
-```text
-gpiodetect: No such device
-ioctl(...): No such device
-```
-
-while on the host `ls /dev/gpiochip*` and `gpiodetect` work.
-
-## Decision tree
-
-```
-Host: ls /dev/gpiochip*
-        │
-        ├─ empty ──► sudo ./scripts/setup-gpio-sim.sh
-        │              (modprobe gpio-sim / gpio-mockup)
-        │
-        └─ chips present (this is your “BBB” GPIO)
-                 │
-                 Container: ls /dev/gpiochip*
-                        │
-                        ├─ empty ──► pass them in:
-                        │              --device=/dev/gpiochip0 …
-                        │              ./scripts/run-bbb-container.sh run
-                        │
-                        └─ node exists
-                                 ├─ EACCES → permissions / SELinux
-                                 │            --security-opt label=disable
-                                 ├─ ENOTTY/EINVAL → arch/ABI (avoid qemu-user)
-                                 └─ ENODEV → stale node; re-run setup + recreate container
-```
-
-## RHEL 9 Podman
+## Container on RHEL/Zorin lab
 
 ```bash
-sudo ./scripts/setup-gpio-sim.sh
-
-podman run --rm -it \
-  --device=/dev/gpiochip0 \
-  --device=/dev/gpiochip1 \
-  --device=/dev/gpiochip2 \
-  --security-opt label=disable \
-  localhost/bbb-gpio:libgpiod-2.2.1 \
-  gpiodetect
+./scripts/run-rhel9-on-zorin.sh run
 ```
 
-## Why libgpiod 2.2.1 alone is not enough
+If `/dev/gpiochip*` is missing inside the container while mockup loaded on the host, pass `/dev` and keep `--privileged` (the Zorin launcher already does).
 
-Matching the BBB’s libgpiod version keeps your **API** aligned. The container still needs the host chardev nodes (`--device=...`) created by `setup-gpio-sim.sh` on RHEL 9.
+## libgpiod 1.6.3
+
+```bash
+gpioset gpiochip0 0=1
+gpioget gpiochip0 0
+```
+
+Matching **1.6.3** does not create device nodes; **gpio-mockup** (or real hardware) does. This kit does **not** use gpio-sim.
+
+## No kernel modules
+
+```bash
+python3 tools/gpiod_usermock.py --demo
+```

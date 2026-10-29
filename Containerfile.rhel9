@@ -1,0 +1,74 @@
+# RHEL 9 userspace (UBI) with libgpiod 1.6.3 — no gpio-sim.
+# GPIO chips come from gpio-mockup (host kernel module) or tools/gpiod_usermock.py.
+#
+# Build (from repo root):
+#   docker build -f container/Containerfile.rhel9 -t bone-gpio-rhel9 .
+# Run:
+#   ./scripts/run-rhel9-on-zorin.sh
+
+ARG UBI_TAG=9.5
+FROM registry.access.redhat.com/ubi9/ubi:${UBI_TAG}
+
+# Pin to the RHEL 9 / libgpiod 1.6.3 world (not 2.x)
+ARG LIBGPIOD_VER=1.6.3
+ENV LIBGPIOD_VER=${LIBGPIOD_VER} \
+    BONE_GPIO_ROOT=/opt/bone-gpio-kit \
+    LANG=C.UTF-8
+
+RUN dnf -y update \
+ && dnf -y install \
+      ca-certificates \
+      curl \
+      tar \
+      gzip \
+      findutils \
+      which \
+      kmod \
+      python3 \
+      gcc \
+      gcc-c++ \
+      make \
+      autoconf \
+      automake \
+      libtool \
+      pkgconf-pkg-config \
+      diffutils \
+      file \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf
+
+# Build exact libgpiod 1.6.3 (RHEL 9–era API/CLI; not 2.x)
+WORKDIR /tmp/libgpiod-src
+RUN set -eux; \
+    curl -fsSL \
+      "https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/snapshot/libgpiod-${LIBGPIOD_VER}.tar.gz" \
+      -o libgpiod.tar.gz; \
+    tar -xzf libgpiod.tar.gz --strip-components=1; \
+    ./autogen.sh \
+      --prefix=/usr/local \
+      --enable-tools=yes \
+      --enable-bindings-cxx=no; \
+    make -j"$(nproc)"; \
+    make install; \
+    echo /usr/local/lib > /etc/ld.so.conf.d/libgpiod.conf; \
+    ldconfig; \
+    gpiodetect --version; \
+    rm -rf /tmp/libgpiod-src
+
+COPY scripts ${BONE_GPIO_ROOT}/scripts
+COPY tools ${BONE_GPIO_ROOT}/tools
+COPY examples ${BONE_GPIO_ROOT}/examples
+COPY docs ${BONE_GPIO_ROOT}/docs
+COPY README.md ${BONE_GPIO_ROOT}/README.md
+
+COPY container/rhel9-entrypoint.sh /usr/local/bin/rhel9-entrypoint
+RUN chmod +x /usr/local/bin/rhel9-entrypoint \
+      ${BONE_GPIO_ROOT}/scripts/*.sh \
+      ${BONE_GPIO_ROOT}/examples/*.sh \
+      ${BONE_GPIO_ROOT}/tools/*.py \
+ && ln -sf ${BONE_GPIO_ROOT}/scripts/setup-gpio-mockup.sh /usr/local/bin/setup-gpio-mockup \
+ && ln -sf ${BONE_GPIO_ROOT}/scripts/diagnose-gpio.sh /usr/local/bin/diagnose-gpio
+
+WORKDIR ${BONE_GPIO_ROOT}
+ENTRYPOINT ["/usr/local/bin/rhel9-entrypoint"]
+CMD ["/bin/bash"]

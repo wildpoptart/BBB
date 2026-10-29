@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Diagnose BBB-like host GPIO on RHEL9 (gpio-sim backed /dev/gpiochip*).
+# Diagnose BBB-like host GPIO for libgpiod 1.6.x (gpio-mockup; no gpio-sim).
 set -euo pipefail
 
 bold() { printf '\n==> %s\n' "$*"; }
@@ -16,12 +16,24 @@ if [[ -r /etc/os-release ]]; then
 fi
 info "arch: $(uname -m)"
 
+bold "libgpiod (expect 1.6.x)"
+if command -v gpiodetect >/dev/null 2>&1; then
+  ver=$(gpiodetect --version 2>/dev/null || echo present)
+  info "$ver"
+  if echo "$ver" | grep -qE '2\.'; then
+    warn "This kit targets libgpiod 1.6.3; you have 2.x tools (CLI flags differ)"
+  fi
+else
+  info "gpiodetect not installed"
+fi
+
 bold "Host GPIO character devices"
 shopt -s nullglob
 chips=(/dev/gpiochip*)
 if ((${#chips[@]} == 0)); then
-  warn "No /dev/gpiochip* on this host"
-  info "Create BBB-like chips: sudo ./scripts/setup-gpio-sim.sh"
+  warn "No /dev/gpiochip*"
+  info "Create with: sudo ./scripts/setup-gpio-mockup.sh"
+  info "Or userspace mock: python3 tools/gpiod_usermock.py --demo"
 else
   for c in "${chips[@]}"; do
     majmin=$(stat -c '%t:%T' "$c" 2>/dev/null || echo '?')
@@ -30,84 +42,52 @@ else
   done
 fi
 
-bold "gpio-sim / gpio-mockup"
+bold "gpio-mockup (gpio-sim is not used)"
 if command -v lsmod >/dev/null 2>&1; then
-  if lsmod | grep -q '^gpio_sim'; then
-    ok "gpio_sim loaded"
-  elif lsmod | grep -q '^gpio_mockup'; then
+  if lsmod | grep -q '^gpio_mockup'; then
     ok "gpio_mockup loaded"
   else
-    info "neither gpio_sim nor gpio_mockup loaded"
+    info "gpio_mockup not loaded"
+  fi
+  if lsmod | grep -q '^gpio_sim'; then
+    warn "gpio_sim is loaded but this kit does not use it"
   fi
 fi
-if [[ -d /sys/kernel/config/gpio-sim ]]; then
-  for d in /sys/kernel/config/gpio-sim/*; do
-    [[ -d "$d" ]] || continue
-    live="?"
-    [[ -f "$d/live" ]] && live=$(cat "$d/live" 2>/dev/null || echo '?')
-    info "configfs $(basename "$d") live=$live"
-  done
-fi
-
-bold "Host libgpiod tools"
-if command -v gpiodetect >/dev/null 2>&1; then
-  info "gpiodetect: $(gpiodetect --version 2>/dev/null || echo present)"
-  if ((${#chips[@]} > 0)) && gpiodetect 2>/dev/null; then
-    ok "gpiodetect succeeded on host"
-  elif ((${#chips[@]} > 0)); then
-    warn "gpiodetect failed on host"
+if command -v modinfo >/dev/null 2>&1; then
+  if modinfo gpio-mockup >/dev/null 2>&1; then
+    ok "gpio-mockup module available on this kernel"
+  else
+    warn "gpio-mockup not in this kernel — use tools/gpiod_usermock.py"
   fi
-else
-  info "gpiodetect not installed (optional; container has it)"
 fi
 
 if command -v python3 >/dev/null 2>&1; then
-  bold "Python chardev probe (host)"
+  bold "Python chardev probe / usermock"
   root="$(cd "$(dirname "$0")/.." && pwd)"
   if ((${#chips[@]} > 0)); then
     if python3 "$root/tools/gpio_probe.py" "${chips[0]}"; then
-      ok "gpio_probe.py open+ioctl ok on ${chips[0]}"
+      ok "gpio_probe.py ok on ${chips[0]}"
     else
       warn "gpio_probe.py failed on ${chips[0]}"
     fi
   else
-    info "skip probe (no chips)"
+    info "no chips — running usermock demo"
+    python3 "$root/tools/gpiod_usermock.py" --demo || true
   fi
 fi
 
 bold "SELinux (RHEL)"
 if command -v getenforce >/dev/null 2>&1; then
-  enc=$(getenforce 2>/dev/null || echo unknown)
-  info "getenforce: $enc"
-  if [[ "$enc" == "Enforcing" ]]; then
-    info "Container open/ioctl fails with AVC? use --security-opt label=disable"
-  fi
+  info "getenforce: $(getenforce 2>/dev/null || echo unknown)"
 else
   info "SELinux tools not present"
 fi
 
-bold "Container runtime"
-runtime=""
-if command -v podman >/dev/null 2>&1; then
-  runtime=podman
-  ok "podman: $(podman --version)"
-elif command -v docker >/dev/null 2>&1; then
-  runtime=docker
-  ok "docker: $(docker --version)"
-else
-  info "No podman/docker (OK if you develop on the host against the chips)"
-fi
-
-if [[ -n "$runtime" ]] && ((${#chips[@]} > 0)); then
-  bold "Hint: container passthrough"
-  info "./scripts/run-bbb-container.sh run"
-fi
-
 bold "Summary"
 if ((${#chips[@]} == 0)); then
-  warn "No host gpiochip — run: sudo ./scripts/setup-gpio-sim.sh"
+  warn "No /dev/gpiochip* — mockup not loaded, or use usermock for logic-only tests"
   exit 2
 fi
-ok "Host has ${#chips[@]} gpiochip device(s) for BBB-like development."
-info "Point libgpiod at these devices; use the container only if you need Debian 2.2.1 userspace."
+ok "Host has ${#chips[@]} gpiochip device(s) for libgpiod 1.6.x"
+info "1.x CLI: gpioset gpiochip0 0=1   /   gpioget gpiochip0 0"
 exit 0

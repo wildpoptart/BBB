@@ -1,0 +1,75 @@
+/*
+ * Place near other do_ioctl_* helpers in linux-user/syscall.c.
+ * Add: #include <linux/gpio.h>
+ *
+ * Prototype must be visible before ioctls.h is included — same pattern as
+ * do_ioctl_tiocgptpeer / do_ioctl_dm (forward decl or define above IOCTL table).
+ */
+
+static abi_long do_ioctl_gpio_linehandle(const IOCTLEntry *ie, uint8_t *buf_temp,
+                                         int fd, int cmd, abi_long arg)
+{
+    struct target_gpiohandle_request *target;
+    struct gpiohandle_request host;
+    abi_long ret;
+    unsigned i;
+
+    target = lock_user(VERIFY_WRITE, arg, sizeof(*target), 0);
+    if (!target) {
+        return -TARGET_EFAULT;
+    }
+
+    memset(&host, 0, sizeof(host));
+    __get_user(host.flags, &target->flags);
+    __get_user(host.lines, &target->lines);
+    if (host.lines == 0 || host.lines > GPIOHANDLES_MAX) {
+        unlock_user(target, arg, 0);
+        return -TARGET_EINVAL;
+    }
+    for (i = 0; i < host.lines; i++) {
+        __get_user(host.lineoffsets[i], &target->lineoffsets[i]);
+        host.default_values[i] = target->default_values[i];
+    }
+    memcpy(host.consumer_label, target->consumer_label,
+           sizeof(host.consumer_label));
+
+    ret = get_errno(safe_ioctl(fd, GPIO_GET_LINEHANDLE_IOCTL, &host));
+    if (is_error(ret)) {
+        unlock_user(target, arg, 0);
+        return ret;
+    }
+
+    __put_user(host.fd, &target->fd);
+    unlock_user(target, arg, sizeof(*target));
+    return ret;
+}
+
+static abi_long do_ioctl_gpio_lineevent(const IOCTLEntry *ie, uint8_t *buf_temp,
+                                        int fd, int cmd, abi_long arg)
+{
+    struct target_gpioevent_request *target;
+    struct gpioevent_request host;
+    abi_long ret;
+
+    target = lock_user(VERIFY_WRITE, arg, sizeof(*target), 0);
+    if (!target) {
+        return -TARGET_EFAULT;
+    }
+
+    memset(&host, 0, sizeof(host));
+    __get_user(host.lineoffset, &target->lineoffset);
+    __get_user(host.handleflags, &target->handleflags);
+    __get_user(host.eventflags, &target->eventflags);
+    memcpy(host.consumer_label, target->consumer_label,
+           sizeof(host.consumer_label));
+
+    ret = get_errno(safe_ioctl(fd, GPIO_GET_LINEEVENT_IOCTL, &host));
+    if (is_error(ret)) {
+        unlock_user(target, arg, 0);
+        return ret;
+    }
+
+    __put_user(host.fd, &target->fd);
+    unlock_user(target, arg, sizeof(*target));
+    return ret;
+}

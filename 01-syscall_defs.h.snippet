@@ -1,0 +1,64 @@
+/* --- GPIO character device uAPI v1 (libgpiod 1.6.x) --- */
+#ifndef GPIO_MAX_NAME_SIZE
+#define GPIO_MAX_NAME_SIZE 32
+#endif
+#ifndef GPIOHANDLES_MAX
+#define GPIOHANDLES_MAX 64
+#endif
+
+struct target_gpiochip_info {
+    char name[GPIO_MAX_NAME_SIZE];
+    char label[GPIO_MAX_NAME_SIZE];
+    abi_uint lines;
+};
+
+struct target_gpioline_info {
+    abi_uint line_offset;
+    abi_uint flags;
+    char name[GPIO_MAX_NAME_SIZE];
+    char consumer[GPIO_MAX_NAME_SIZE];
+};
+
+struct target_gpiohandle_data {
+    uint8_t values[GPIOHANDLES_MAX];
+};
+
+struct target_gpiohandle_config {
+    abi_uint flags;
+    uint8_t default_values[GPIOHANDLES_MAX];
+    abi_uint padding[4];
+};
+
+struct target_gpiohandle_request {
+    abi_uint lineoffsets[GPIOHANDLES_MAX];
+    abi_uint flags;
+    uint8_t default_values[GPIOHANDLES_MAX];
+    char consumer_label[GPIO_MAX_NAME_SIZE];
+    abi_uint lines;
+    abi_int fd;
+};
+
+struct target_gpioevent_request {
+    abi_uint lineoffset;
+    abi_uint handleflags;
+    abi_uint eventflags;
+    char consumer_label[GPIO_MAX_NAME_SIZE];
+    abi_int fd;
+};
+
+#define TARGET_GPIO_GET_CHIPINFO_IOCTL \
+    TARGET_IOR(0xB4, 0x01, struct target_gpiochip_info)
+#define TARGET_GPIO_GET_LINEINFO_IOCTL \
+    TARGET_IOWR(0xB4, 0x02, struct target_gpioline_info)
+#define TARGET_GPIO_GET_LINEHANDLE_IOCTL \
+    TARGET_IOWR(0xB4, 0x03, struct target_gpiohandle_request)
+#define TARGET_GPIO_GET_LINEEVENT_IOCTL \
+    TARGET_IOWR(0xB4, 0x04, struct target_gpioevent_request)
+#define TARGET_GPIOHANDLE_GET_LINE_VALUES_IOCTL \
+    TARGET_IOWR(0xB4, 0x08, struct target_gpiohandle_data)
+#define TARGET_GPIOHANDLE_SET_LINE_VALUES_IOCTL \
+    TARGET_IOWR(0xB4, 0x09, struct target_gpiohandle_data)
+#define TARGET_GPIOHANDLE_SET_CONFIG_IOCTL \
+    TARGET_IOWR(0xB4, 0x0A, struct target_gpiohandle_config)
+#define TARGET_GPIO_GET_LINEINFO_UNWATCH_IOCTL \
+    TARGET_IOWR(0xB4, 0x0C, abi_uint)

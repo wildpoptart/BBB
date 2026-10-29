@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Build / run a Debian container with libgpiod 2.2.1 and host gpiochip passthrough.
+# Optional Debian container with libgpiod 1.6.3 + host gpiochip passthrough.
+# Prefer ./scripts/run-rhel9-on-zorin.sh for the main lab.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-IMAGE="${BBB_GPIO_IMAGE:-localhost/bbb-gpio:libgpiod-2.2.1}"
-LIBGPIOD_VER="${LIBGPIOD_VER:-2.2.1}"
+IMAGE="${BBB_GPIO_IMAGE:-localhost/bbb-gpio:libgpiod-1.6.3}"
+LIBGPIOD_VER="${LIBGPIOD_VER:-1.6.3}"
 
 pick_runtime() {
   if [[ -n "${CONTAINER_RUNTIME:-}" ]]; then
@@ -46,7 +47,7 @@ device_args() {
   local chips=(/dev/gpiochip*)
   if ((${#chips[@]} == 0)); then
     echo "error: no /dev/gpiochip* on host." >&2
-    echo "  Create BBB-like chips first: sudo ./scripts/setup-gpio-sim.sh" >&2
+    echo "  Create BBB-like chips first: sudo ./scripts/setup-gpio-mockup.sh" >&2
     exit 2
   fi
   echo "==> Passing host chips: ${chips[*]}" >&2
